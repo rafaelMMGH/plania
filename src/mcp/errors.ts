@@ -34,6 +34,10 @@ export const ERRORS = {
   REPO_GITHUB_NOT_FOUND: [400, "GitHub: no repository with that owner/name for this gh login"],
   REPO_GITHUB_NO_WRITE: [400, "GitHub: this gh login cannot write to the repository"],
   REPO_GITHUB_FAILED: [400, "GitHub: gh failed (detail: step)"],
+  // The guide's «Abrir un proyecto existente», SSH choice (src/runner/open-project.ts): git over ssh in batch mode.
+  REPO_SSH_DENIED: [400, "open over SSH: the repository's server refused this machine's SSH keys (or no key is loaded in the agent)"],
+  REPO_SSH_HOST_UNKNOWN: [400, "open over SSH: this machine has never accepted the server's host key (known_hosts); Plania never accepts one for the owner"],
+  REPO_SSH_NOT_FOUND: [400, "open over SSH: no repository at that URL for these keys"],
   // PLA-I67-2: skills the owner writes on screen (src/runner/skills.ts).
   SKILL_INVALID: [400, "a skill does not fit the Agent Skills format: slug, name, description (1-1024, no angle brackets), body (1-500 lines) or a supporting file's path or size (detail: field, hint)"],
   SKILL_NOT_ALLOWED: [400, "a skill carries something other than text: a script or executable file, hooks, an allowed-tools grant, or a command run at load time (detail: field, hint)"],
@@ -58,6 +62,7 @@ export const ERRORS = {
   INVALID_BATCH_OP: [400, "batch: an op is not set_task, set_check, add_result, add_decision, create_task or note"],
   ACTOR_REQUIRED: [400, "actor.agent is missing and no agent token identifies the caller"],
   INVALID_APPROVAL: [400, "a waiver needs a non-empty reason. The old approval action list is no longer a tool"],
+  WAIVE_VISUAL_FORBIDDEN: [403, "waive_check: a visual check (how the screen looks, a still, a viewport) is waived only by the QA lane or the owner (detail: n, text); prove it with a visual result or ask the owner"],
   PARENT_MUST_BE_INITIATIVE: [400, "parent_key names a ticket"],
   RESERVED_ACTOR: [400, "actor.agent is owner: only the screen writes as the owner"],
   MUESTRA_REQUIRED: [400, "finish: the delivery changes the screen on a project Plania photographs; pass muestra {frase, vistas, pasos} (detail: ui_files, hint)"],

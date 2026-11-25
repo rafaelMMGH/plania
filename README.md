@@ -716,6 +716,9 @@ before Plania runs, as a plain-text tool error (`INVALID_INPUT`). The catalog is
 | `REPO_NOT_GIT` | 400 | new project: the folder given as repo_path is not a git repository |
 | `REPO_ORIGIN_UNREACHABLE` | 400 | new project: origin could not be read (network, credentials or a wrong address) |
 | `REPO_PUSH_FAILED` | 400 | prepare the code: pushing to origin was refused (access or network) |
+| `REPO_SSH_DENIED` | 400 | open over SSH: the repository's server refused this machine's SSH keys (or no key is loaded in the agent) |
+| `REPO_SSH_HOST_UNKNOWN` | 400 | open over SSH: this machine has never accepted the server's host key (known_hosts); Plania never accepts one for the owner |
+| `REPO_SSH_NOT_FOUND` | 400 | open over SSH: no repository at that URL for these keys |
 | `RESERVED_ACTOR` | 400 | actor.agent is owner: only the screen writes as the owner |
 | `SECRET_LIKE_VALUE` | 400 | an env flag looks like a secret (a key name, a token prefix, or 20+ random characters); flags record whether something is configured, never the value |
 | `SKILL_IMPORT_FORMAT` | 400 | the link is not a skill Plania can bring: not a SKILL.md, a GitHub folder or a GitHub file or raw address; no SKILL.md with a name and a description; or more files or folders than a skill holds (detail: reason) |
@@ -737,6 +740,7 @@ before Plania runs, as a plain-text tool error (`INVALID_INPUT`). The catalog is
 | `NOT_DELEGABLE` | 403 | answer_delegated only answers one human_only question that has named options. An approval_id on that call is ignored |
 | `SEAT_PROPOSAL_NOT_PO` | 403 | propose_seat: only the project's product owner proposes a seat; runs never create, change or retire seats |
 | `THREAD_FORBIDDEN` | 403 | thread_post or thread_read on a thread that is not yours: Asistente may use every thread, a team member only its own project's (detail: thread, agent) |
+| `WAIVE_VISUAL_FORBIDDEN` | 403 | waive_check: a visual check (how the screen looks, a still, a viewport) is waived only by the QA lane or the owner (detail: n, text); prove it with a visual result or ask the owner |
 | `AGENT_NOT_FOUND` | 404 | unknown roster slug (owner_agent or reports_to) |
 | `CAMINO_KEY_MISSING` | 404 | camino: no key is saved for that service on this project |
 | `CHECK_NOT_FOUND` | 404 | no check with that n on this task |

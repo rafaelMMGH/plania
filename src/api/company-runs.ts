@@ -16,6 +16,8 @@ import { claim, setTask } from "../mcp/writes.js";
 import { stopRun } from "../runner/runner.js";
 import { isSessionOf, sessionsOf } from "../runner/run-session.js";
 import { defineWords, say } from "../words.js";
+import { healStep } from "../runner/heal.js";
+import { ST } from "../state/status.js";
 
 // PLA-I2-10: what a run did and the run errors in the install's language; the Spanish is unchanged.
 export const COMPANY_RUNS_WORDS = defineWords({
@@ -141,7 +143,7 @@ export async function resumeRun(db: Db, id: string, deps?: HeartbeatDeps): Promi
       .innerJoin(projects, eq(projects.id, tasks.projectId))
       .where(and(eq(projects.slug, r.project), eq(tasks.key, r.taskKey)))
       .limit(1);
-    if (t?.status === "In progress" && isSessionOf(t.owner?.session_id, r.id)) {
+    if (t?.status === ST.inProgress && isSessionOf(t.owner?.session_id, r.id)) {
       await claim(db, { project: r.project, key: r.taskKey, action: "release" } as never, { ...webCtx, tool: "screen.run_resume" });
     }
   }
@@ -149,11 +151,25 @@ export async function resumeRun(db: Db, id: string, deps?: HeartbeatDeps): Promi
   return { woke: out.woke, reason: out.reason, ticket: r.taskKey };
 }
 
-export async function noteForAgent(db: Db, slug: string, key: string, text: string): Promise<{ noted: true } | Refusal> {
-  const [p] = await db.select({ id: projects.id }).from(projects).where(eq(projects.slug, slug)).limit(1);
+export async function noteForAgent(db: Db, slug: string, key: string, text: string): Promise<{ noted: true; woke?: boolean } | Refusal> {
+  const [p] = await db.select({ id: projects.id, slug: projects.slug }).from(projects).where(eq(projects.slug, slug)).limit(1);
   if (!p) return { error: "PROJECT_NOT_FOUND", status: 404, hint: "no such project" };
   const [t] = await db.select({ id: tasks.id }).from(tasks).where(and(eq(tasks.projectId, p.id), eq(tasks.key, key))).limit(1);
   if (!t) return { error: "TASK_NOT_FOUND", status: 404, hint: rw().noTicket };
   await setTask(db, { project: slug, key, note: rw().fromCompany(text.trim()), note_kind: "screen", note_words: text.trim() } as never, { ...webCtx, tool: "screen.run_note" });
-  return { noted: true };
+  return { noted: true, ...(await wakeForNote(db, p, key, text.trim())) };
+}
+
+// PLA-167 (guided test 2026-11-22): a note on a step nobody runs reached nobody. The note is an event on the ticket; an
+// idle agent never reads it, and a run that ended while holding the step kept its 30-minute lease, so the board said
+// «Taller trabaja» and offered nothing for half an hour, twice. When no run is live on the ticket: a lease held by an
+// ended runner run is released, and the agent that works the ticket (its owner, else Taller) is woken with the note as
+// the reason its prompt reads. A live run gets the note at its next step, as before; a person's lease is left alone.
+async function wakeForNote(db: Db, p: { id: string; slug: string }, key: string, text: string): Promise<{ woke: boolean }> {
+  const [t] = await db.select({ kind: tasks.kind, status: tasks.status }).from(tasks).where(and(eq(tasks.projectId, p.id), eq(tasks.key, key))).limit(1);
+  // A note wakes a step someone should be working (Ready, or held); one in review or waiting stays as it is.
+  if (!t || t.kind !== "ticket" || (t.status !== ST.inProgress && t.status !== ST.ready)) return { woke: false };
+  // PLA-I74-5: the watchdog's heal, with the note as the reason.
+  const out = await healStep(db, p, key, { reason: `note from the owner: ${text}`, release: true, from: "screen.run_note" });
+  return { woke: out.woke };
 }
