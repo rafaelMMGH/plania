@@ -8,7 +8,7 @@
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { claudeSignInLine } from "../runner/run-env.js";
 import type { Db } from "../db/client.js";
-import { agentRuns, agents, docs, events, lessons, projects, questions, taskBlockers, tasks, threadMessages, type Actor, type Agent, type Project, type RunnerSettings } from "../db/schema.js";
+import { agentConnections, agentRuns, agents, docs, events, lessons, projects, questions, taskBlockers, tasks, threadMessages, type Actor, type Agent, type Project, type RunnerSettings } from "../db/schema.js";
 import { hasUnsatisfiedBlocker } from "../mcp/blockers.js";
 import { resolveMotor } from "../runner/motor.js";
 import { NO_SKILLS } from "../runner/packs.js";
@@ -164,6 +164,8 @@ export type TeamMember = {
   name: string;
   reports_to: string | null;
   lessons: { active: number; proposed: number };
+  // PLA-I75: how many connections beyond Plania the seat has (agent_connections), for the chart's «N con.» tag.
+  connections: number;
   // PLA-I71-3: when the owner paused this seat (it starts no run), and a role of the owner's own's title (null: a
   // factory role, named by its role).
   paused_at: string | null;
@@ -361,6 +363,7 @@ async function memberView(db: Db, a: Agent, ctx: { paused: boolean; threadId: st
     name: a.name,
     reports_to: null,
     lessons: { active: 0, proposed: 0 },
+    connections: 0,
     paused_at: a.pausedAt ? a.pausedAt.toISOString() : null,
     puesto: a.role && a.roleTemplate && a.role !== a.roleTemplate && !isRunnerRole(a.role) ? a.title || a.role : null,
   };
@@ -522,9 +525,19 @@ async function teamView(db: Db, p: Project, ctx: { paused: boolean; threadId: st
         .where(and(inArray(lessons.agentId, ids), inArray(lessons.state, ["active", "proposed"])))
         .groupBy(lessons.agentId, lessons.state)
     : [];
+  // PLA-I75: connections per seat, in one query.
+  const cables = ids.length
+    ? await db
+        .select({ agent: agentConnections.agentId, n: sql<number>`count(*)::int` })
+        .from(agentConnections)
+        .where(inArray(agentConnections.agentId, ids))
+        .groupBy(agentConnections.agentId)
+    : [];
+  const cableCount = new Map(cables.map((c) => [c.agent, c.n]));
   seats.forEach((a, i) => {
     out[i]!.reports_to = a.reportsTo ? (slugOf.get(a.reportsTo) ?? null) : null;
     for (const c of counts) if (c.agent === a.id) out[i]!.lessons[c.state as "active" | "proposed"] = c.n;
+    out[i]!.connections = cableCount.get(a.id) ?? 0;
   });
   return out;
 }

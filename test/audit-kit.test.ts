@@ -470,10 +470,40 @@ test("AUDIT-6: a QA walk-through adds the browser tools to that run's servers; a
   assert.deepEqual(Object.keys(runner.mcpConfig("http://x/mcp").mcpServers), ["plania"]);
   // A finish that runs the project's checks is silent for minutes; without this Claude Code drops the call at five.
   assert.equal(runner.mcpConfig("http://x/mcp").mcpServers.plania.timeout, 30 * 60_000);
-  assert.deepEqual(runner.browserServer({}), { command: "npx", args: ["-y", "@playwright/mcp@latest", "--headless", "--isolated"] });
+  assert.deepEqual(runner.browserServer({}), { command: "npx", args: ["-y", "@playwright/mcp@0.0.86", "--headless", "--isolated"] });
   const cfg = runner.mcpConfig("http://x/mcp", runner.browserServer({ PLANIA_BROWSER_MCP: "node  /opt/browser.js --headless" }));
   assert.deepEqual(cfg.mcpServers.browser, { command: "node", args: ["/opt/browser.js", "--headless"] });
   const idea = runner.userPrompt({ agent: "Research", role: "research", project: { slug: "micasa", title: "MiCasa" }, goal: null, task: { key: "MIC-IDEA3", title: "Sucursales" }, workspace: null, sessionId: "run-1", verify: [{ name: "test", command: "pnpm test" }] });
   assert.match(idea, /deliver your stage with deliver_stage \(key MIC-IDEA3/);
   assert.doesNotMatch(idea, /Checks Plania runs/, "an idea has no delivery to check");
+});
+
+test("PLA-I75 review: a run with a connection carries its server, its deny rules and the allowlist hook; the hook file lists only its tools", async () => {
+  await setSettings({});
+  await ready("KIT-CX");
+  const id = (await raw.query(`select id from agents where slug = 'research'`)).rows[0].id as string;
+  await raw.query(`delete from agent_connections where agent_id = $1`, [id]);
+  await raw.query(
+    `insert into agent_connections (agent_id, server, version, keys, writes_on, tools_seen) values ($1, 'github', '2.2.0', '{"GITHUB_PERSONAL_ACCESS_TOKEN":"MY_GH_RO"}'::jsonb, '{}', null)`,
+    [id],
+  );
+  const f = fakes({ MY_GH_RO: "ghp_fake_for_test" });
+  await wake("research", f.deps, "KIT-CX");
+  const run = f.spawned[0]!;
+  const mcp = JSON.parse(readFileSync(argAfter(run.args, "--mcp-config")!, "utf8")) as { mcpServers: Record<string, { url?: string; headers?: Record<string, string> }> };
+  assert.equal(mcp.mcpServers.github?.headers?.Authorization, "Bearer ${MY_GH_RO}");
+  assert.doesNotMatch(JSON.stringify(mcp), /ghp_fake_for_test/, "no value in the config");
+  assert.equal(run.env.MY_GH_RO, "ghp_fake_for_test", "the value reaches the child env");
+  const deny = (run.settings.permissions as { deny: string[] }).deny;
+  assert.ok(deny.includes("mcp__github__push_files") && deny.includes("mcp__github__merge_pull_request"));
+  const pre = (run.settings.hooks as { PreToolUse: { matcher: string; hooks: { command: string }[] }[] }).PreToolUse;
+  const hook = pre.find((h) => h.matcher.includes("github"))!;
+  assert.ok(hook.hooks[0]!.command.includes("conexiones-tool-hook.mjs"));
+  const allowPath = hook.hooks[0]!.command.match(/"([^"]+conexiones-allow\.json)"/)![1]!;
+  const file = JSON.parse(readFileSync(allowPath, "utf8")) as { servers: Record<string, string[]> };
+  assert.ok(file.servers.github!.includes("get_pull_request"));
+  assert.ok(!file.servers.github!.includes("create_issue"), "writes stay off");
+  run.child.exit(0);
+  await runner.waitForAllRuns();
+  await raw.query(`delete from agent_connections where agent_id = $1`, [id]);
 });
