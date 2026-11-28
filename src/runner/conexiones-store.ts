@@ -31,6 +31,7 @@ import {
   type VersionChange,
 } from "./conexiones.js";
 import { accessSync, constants as fsConstants } from "node:fs";
+import { homedir } from "node:os";
 import path from "node:path";
 import { isPlaniaOwn } from "./run-env.js";
 import { seatOf } from "./skills.js";
@@ -442,6 +443,22 @@ export function commandOnPath(cmd: string, pathVar: string | undefined): boolean
   const ends = process.platform === "win32" ? ["", ...(process.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";").filter(Boolean)] : [""];
   return (pathVar ?? "").split(path.delimiter).some((d) => !!d && ends.some((x) => canRun(path.join(d, cmd + x))));
 }
+
+/**
+ * PLA-172: where a local server's program is, for a run whose PATH may be a service's bare one (launchd gives
+ * /usr/bin:/bin:/usr/sbin:/sbin, without the folder npx and node live in). The run's PATH first: then the command
+ * stays as it is (null dir). Else the folder of the node running Plania (npx ships beside it, whatever installed
+ * it), then the usual install folders. Returns the full path and its folder, or null when it is nowhere.
+ */
+export function findCommand(cmd: string, pathVar: string | undefined, extraDirs: string[] = fallbackDirs()): { command: string; dir: string | null } | null {
+  if (cmd.includes("/")) return canRun(cmd) ? { command: cmd, dir: null } : null;
+  if (commandOnPath(cmd, pathVar)) return { command: cmd, dir: null };
+  const ends = process.platform === "win32" ? ["", ...(process.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";").filter(Boolean)] : [""];
+  for (const d of extraDirs) for (const x of ends) if (canRun(path.join(d, cmd + x))) return { command: path.join(d, cmd + x), dir: d };
+  return null;
+}
+export const fallbackDirs = (): string[] =>
+  [...new Set([path.dirname(process.execPath), "/opt/homebrew/bin", "/usr/local/bin", path.join(homedir(), ".local", "bin"), path.join(homedir(), ".cargo", "bin")])];
 const canRun = (file: string): boolean => {
   try {
     accessSync(file, fsConstants.X_OK);
@@ -459,9 +476,20 @@ const canRun = (file: string): boolean => {
 export async function runConnections(
   db: Db,
   agent: Pick<Agent, "id">,
-  opts: { project: Awaited<ReturnType<typeof projectOf>>; env: NodeJS.ProcessEnv; readOnly: boolean; planiaDb: string | null; qaBrowser: boolean; hasCommand?: (cmd: string) => boolean },
+  opts: {
+    project: Awaited<ReturnType<typeof projectOf>>;
+    env: NodeJS.ProcessEnv;
+    readOnly: boolean;
+    planiaDb: string | null;
+    qaBrowser: boolean;
+    /** Tests: whether the command is on the run's PATH (kept as is), instead of looking. */
+    hasCommand?: (cmd: string) => boolean;
+    /** Tests: where to look past the run's PATH (default: beside Plania's node, then the usual install folders). */
+    extraDirs?: string[];
+  },
 ): Promise<RunConnections> {
-  const hasCommand = opts.hasCommand ?? ((cmd: string) => commandOnPath(cmd, opts.env.PATH ?? process.env.PATH));
+  const runPath = opts.env.PATH ?? process.env.PATH ?? "";
+  const locate = (cmd: string) => (opts.hasCommand ? (opts.hasCommand(cmd) ? { command: cmd, dir: null } : null) : findCommand(cmd, runPath, opts.extraDirs));
   const rows = await db.select().from(agentConnections).where(eq(agentConnections.agentId, agent.id)).orderBy(asc(agentConnections.createdAt));
   const out: RunConnections = { servers: {}, deny: [], allow: {}, env: {}, skipped: [] };
   if (!rows.length) return out;
@@ -501,7 +529,14 @@ export async function runConnections(
       out.skipped.push({ server: c.server, why: "unknown" });
       continue;
     }
-    if (config.type !== "http" && !hasCommand(config.command)) {
+    const found = config.type === "http" ? null : locate(config.command);
+    if (config.type !== "http" && found?.dir) {
+      // PLA-172: found outside the run's PATH: name it by its full path and put its folder first, so npx's own
+      // «#!/usr/bin/env node» finds node too. PATH holds folder names only, never a key.
+      config.command = found.command;
+      config.env = { ...(config.env ?? {}), PATH: [found.dir, runPath].filter(Boolean).join(path.delimiter) };
+    }
+    if (config.type !== "http" && !found) {
       out.skipped.push({ server: c.server, why: "no-command" });
       continue;
     }
