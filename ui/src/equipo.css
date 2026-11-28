@@ -368,3 +368,4 @@ button.cnx-plug:focus-visible { outline: 2px solid var(--cor-violet-2); outline-
 .cnx-code .d { color: var(--cor-red); }
 .cnx-code .k { color: var(--cor-violet-3); }
 @media (max-width: 900px) { .cnx-sheet { grid-template-columns: minmax(0, 1fr); } }
+.cnx-catalog > .ofi-side-head { margin-right: 0; flex-wrap: wrap; }

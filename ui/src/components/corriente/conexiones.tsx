@@ -627,7 +627,7 @@ export const ConnectSheet = ({
             {request && <p className="cor-cap cor-muted">{w.requestOnly(seat)}</p>}
           </div>
         </div>
-        <aside className="cnx-side" aria-label={w.sumHead} data-resumen>
+        <div className="cnx-side" role="group" aria-label={w.sumHead} data-resumen>
           <Label>{w.sumHead}</Label>
           <dl>
             <div>
@@ -664,7 +664,7 @@ export const ConnectSheet = ({
           <Btn kind="primary" disabled={change.isPending || !it.unattended} onClick={submit} data-control="hoja-conectar">
             {change.isPending ? w.connecting : w.doConnect(sum.agents)}
           </Btn>
-        </aside>
+        </div>
       </div>
     </section>
   );
@@ -751,7 +751,7 @@ const ExpertForm = ({ slug, agent }: { slug: string; agent: string }) => {
   const fields = ["server", "package", "version", "args", "allow"] as const;
   const labelOf = (f: (typeof fields)[number]) => (f === "server" ? w.expertName : f === "package" ? w.expertPackage : f === "version" ? w.expertVersion : f === "args" ? w.expertArgs : w.expertAllow);
   return (
-    <aside className="cnx-side" aria-label={w.expert} data-propia>
+    <div className="cnx-side" role="group" aria-label={w.expert} data-propia>
       <Label>{w.expert}</Label>
       <p className="cor-cap cor-muted">{w.expertHint}</p>
       {fields.map((f) => (
@@ -785,6 +785,6 @@ const ExpertForm = ({ slug, agent }: { slug: string; agent: string }) => {
       >
         {w.expertAdd}
       </Btn>
-    </aside>
+    </div>
   );
 };
