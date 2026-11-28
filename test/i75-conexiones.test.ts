@@ -3,12 +3,14 @@
 // tool reaches a throwaway copy only, a version change waits for the owner, an agent only asks (request_connection),
 // and the run log is what the stream showed. Throwaway DB, fake values, no real claude.
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { chmodSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import path from "node:path";
 import { after, before, test } from "node:test";
 import type pg from "pg";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { TEST_BEARER, resetTestDb, useTestEnv } from "./helpers.js";
+import { needs } from "./platform.js";
 
 useTestEnv();
 process.env.PLANIA_PROMPTS_PROJECT = "tienda";
@@ -450,4 +452,57 @@ test("I75 #18: a connection whose program is not installed is left out and repor
   assert.equal(store.commandOnPath("node", process.env.PATH), true);
   await call("DELETE", `${BASE}/taller-tienda/conexiones/shadcn`);
   await call("DELETE", `${BASE}/taller-tienda/conexiones/neon`);
+});
+
+test("PLA-172: a service's bare PATH still reaches npx beside Plania's node; nowhere is still no-command", { skip: needs({ posix: true }) }, async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "pla172-"));
+  const npx = path.join(dir, "npx");
+  writeFile(npx, "#!/bin/sh\nexit 0\n");
+  chmodSync(npx, 0o755);
+  try {
+    await call("PUT", `${BASE}/taller-tienda/conexiones/shadcn`, {});
+    const id = await agentId("taller-tienda");
+    const p = await projectOf(db, "tienda");
+    const BARE = "/usr/bin:/bin:/usr/sbin:/sbin";
+    const opts = { project: p, env: { PATH: BARE }, readOnly: false, planiaDb: "plania", qaBrowser: false };
+    // Found past the run's PATH: full path, its folder first on PATH, nothing else in env.
+    const run = await store.runConnections(db, { id }, { ...opts, extraDirs: ["/nonexistent-pla172", dir] });
+    const sh = run.servers.shadcn as Json;
+    assert.equal(sh.command, npx);
+    assert.deepEqual(sh.args, ["-y", "shadcn@4.23.0", "mcp"]);
+    assert.deepEqual(sh.env, { PATH: `${dir}:${BARE}` });
+    assert.equal(run.skipped.find((x) => x.server === "shadcn"), undefined);
+    // Nowhere: still left out and said why.
+    const none = await store.runConnections(db, { id }, { ...opts, extraDirs: ["/nonexistent-pla172"] });
+    assert.equal(none.servers.shadcn, undefined);
+    assert.deepEqual(none.skipped.find((x) => x.server === "shadcn"), { server: "shadcn", why: "no-command" });
+    // On the run's PATH: the command stays bare and the block gets no env.
+    const onPath = await store.runConnections(db, { id }, { ...opts, env: { PATH: `${dir}:${BARE}` }, extraDirs: [] });
+    assert.equal((onPath.servers.shadcn as Json).command, "npx");
+    assert.equal((onPath.servers.shadcn as Json).env, undefined);
+    // The default places start with the folder of the node running Plania.
+    assert.equal(store.fallbackDirs()[0], path.dirname(process.execPath));
+    await call("DELETE", `${BASE}/taller-tienda/conexiones/shadcn`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("PLA-172: a key still reaches a found program only as ${NAME}, never as a value in its block", { skip: needs({ posix: true }) }, async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "pla172k-"));
+  const npx = path.join(dir, "npx");
+  writeFile(npx, "#!/bin/sh\nexit 0\n");
+  chmodSync(npx, 0o755);
+  try {
+    await call("PUT", `${BASE}/taller-tienda/conexiones/github`, {});
+    await call("PUT", `${BASE}/taller-tienda/conexiones/context7`, {});
+    const id = await agentId("taller-tienda");
+    const p = await projectOf(db, "tienda");
+    const run = await store.runConnections(db, { id }, { project: p, env: { PATH: "/usr/bin:/bin", CONTEXT7_API_KEY: "ctx-secret-value", GITHUB_PERSONAL_ACCESS_TOKEN: "ghp-secret-value" }, readOnly: false, planiaDb: "plania", qaBrowser: false, extraDirs: [dir] });
+    assert.ok(!JSON.stringify(run.servers).includes("secret-value"));
+    await call("DELETE", `${BASE}/taller-tienda/conexiones/github`);
+    await call("DELETE", `${BASE}/taller-tienda/conexiones/context7`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
