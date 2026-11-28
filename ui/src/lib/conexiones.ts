@@ -52,7 +52,7 @@ export type ConexionesRead = {
   llaves: string[];
 };
 
-export type SkipWhy = "needs-key" | "not-a-copy" | "needs-review" | "needs-login" | "unknown" | "qa-browser";
+export type SkipWhy = "needs-key" | "not-a-copy" | "needs-review" | "needs-login" | "unknown" | "qa-browser" | "no-command";
 
 /** Expert mode: what the next run of the seat gets (GET .../conexiones/corrida), with no key value. */
 export type RunPreview = {

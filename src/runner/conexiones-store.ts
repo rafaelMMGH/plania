@@ -30,6 +30,8 @@ import {
   type ToolsSnapshot,
   type VersionChange,
 } from "./conexiones.js";
+import { accessSync, constants as fsConstants } from "node:fs";
+import path from "node:path";
 import { isPlaniaOwn } from "./run-env.js";
 import { seatOf } from "./skills.js";
 
@@ -429,7 +431,24 @@ export type RunConnections = {
   allow: Record<string, string[]>;
   /** Key values for the child env only (never logged, never in a file). */
   env: Record<string, string>;
-  skipped: { server: string; why: "needs-key" | "not-a-copy" | "needs-review" | "needs-login" | "unknown" | "qa-browser" }[];
+  skipped: { server: string; why: "needs-key" | "not-a-copy" | "needs-review" | "needs-login" | "unknown" | "qa-browser" | "no-command" }[];
+};
+
+/** Whether a command (npx, uvx) is on this PATH and runnable. PLA-I75-3: a connection whose program is missing is left
+ *  out and reported, like a missing key, instead of a server that fails to start inside the run. */
+export function commandOnPath(cmd: string, pathVar: string | undefined): boolean {
+  if (cmd.includes("/")) return canRun(cmd);
+  // Windows runs npx as npx.cmd: try each PATHEXT ending too.
+  const ends = process.platform === "win32" ? ["", ...(process.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";").filter(Boolean)] : [""];
+  return (pathVar ?? "").split(path.delimiter).some((d) => !!d && ends.some((x) => canRun(path.join(d, cmd + x))));
+}
+const canRun = (file: string): boolean => {
+  try {
+    accessSync(file, fsConstants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 /**
@@ -440,8 +459,9 @@ export type RunConnections = {
 export async function runConnections(
   db: Db,
   agent: Pick<Agent, "id">,
-  opts: { project: Awaited<ReturnType<typeof projectOf>>; env: NodeJS.ProcessEnv; readOnly: boolean; planiaDb: string | null; qaBrowser: boolean },
+  opts: { project: Awaited<ReturnType<typeof projectOf>>; env: NodeJS.ProcessEnv; readOnly: boolean; planiaDb: string | null; qaBrowser: boolean; hasCommand?: (cmd: string) => boolean },
 ): Promise<RunConnections> {
+  const hasCommand = opts.hasCommand ?? ((cmd: string) => commandOnPath(cmd, opts.env.PATH ?? process.env.PATH));
   const rows = await db.select().from(agentConnections).where(eq(agentConnections.agentId, agent.id)).orderBy(asc(agentConnections.createdAt));
   const out: RunConnections = { servers: {}, deny: [], allow: {}, env: {}, skipped: [] };
   if (!rows.length) return out;
@@ -481,6 +501,10 @@ export async function runConnections(
       out.skipped.push({ server: c.server, why: "unknown" });
       continue;
     }
+    if (config.type !== "http" && !hasCommand(config.command)) {
+      out.skipped.push({ server: c.server, why: "no-command" });
+      continue;
+    }
     out.servers[c.server] = config;
     out.deny.push(...connectionDenyRules(row, opts.readOnly, seenOf(c)));
     out.allow[c.server] = allowedTools(row, opts.readOnly, seenOf(c));
@@ -501,9 +525,9 @@ export type RunPreview = {
 };
 
 /** The same config the runner builds for this seat's next work run (not read-only), without any key value. */
-export async function runPreview(db: Db, project: string, agent: string, env: NodeJS.ProcessEnv = process.env): Promise<RunPreview> {
+export async function runPreview(db: Db, project: string, agent: string, env: NodeJS.ProcessEnv = process.env, hasCommand?: (cmd: string) => boolean): Promise<RunPreview> {
   const a = await seatOf(db, project, agent);
   const p = await projectOf(db, project);
-  const r = await runConnections(db, a, { project: p, env, readOnly: false, planiaDb: null, qaBrowser: false });
+  const r = await runConnections(db, a, { project: p, env, readOnly: false, planiaDb: null, qaBrowser: false, hasCommand });
   return { servers: r.servers, allow: r.allow, deny: r.deny, skipped: r.skipped, keys: Object.keys(r.env).sort() };
 }

@@ -197,7 +197,7 @@ test("I75 #8: a run gets its connections with keys only in its env; a missing ke
   assert.equal(added.status, 200, JSON.stringify(added.json));
   assert.equal(added.json.connections.find((c: Json) => c.server === "mi-mcp").problem, "needs-review");
   const p = await projectOf(db, "tienda");
-  const opts = { project: p, readOnly: false, planiaDb: "plania", qaBrowser: false };
+  const opts = { project: p, readOnly: false, planiaDb: "plania", qaBrowser: false, hasCommand: () => true };
 
   const none = await store.runConnections(db, { id }, { ...opts, env: { DATABASE_URI: "postgres://localhost/tienda" } });
   assert.deepEqual(Object.keys(none.servers), ["playwright"]);
@@ -296,11 +296,11 @@ test("I75 #11: a run may call only its allowlist; the hook refuses any other too
   const id = await agentId("artist-tienda");
   const p = await projectOf(db, "tienda");
   const env = { GITHUB_PERSONAL_ACCESS_TOKEN: "ghp_fake_value", DATABASE_URI: "postgres://localhost/tienda_prueba" };
-  const r = await store.runConnections(db, { id }, { project: p, env, readOnly: false, planiaDb: "plania", qaBrowser: false });
+  const r = await store.runConnections(db, { id }, { project: p, env, readOnly: false, planiaDb: "plania", qaBrowser: false, hasCommand: () => true });
   assert.ok(r.allow.github!.includes("create_issue"), "the write the owner turned on");
   assert.ok(r.allow.github!.includes("get_pull_request"), "reads");
   assert.ok(!r.allow.github!.includes("push_files") && !r.allow.github!.includes("merge_pull_request"));
-  const ro = await store.runConnections(db, { id }, { project: p, env, readOnly: true, planiaDb: "plania", qaBrowser: false });
+  const ro = await store.runConnections(db, { id }, { project: p, env, readOnly: true, planiaDb: "plania", qaBrowser: false, hasCommand: () => true });
   assert.ok(!ro.allow.github!.includes("create_issue"), "a read-only run gets no write");
   assert.deepEqual(ro.allow["mi-mcp"], [], "a custom server with no named tools runs nothing");
 
@@ -427,4 +427,27 @@ test("I75 #17: the catalog names its maker and who uses it in the project; the c
   assert.ok(team.length > 0);
   for (const m of team) assert.equal(m.connections, rows.find((x) => x.slug === m.agent)?.n ?? 0, m.agent);
   assert.ok(team.find((m) => m.agent === "po-tienda")!.connections >= 1);
+});
+
+test("I75 #18: a connection whose program is not installed is left out and reported, and the rest of the run goes on", async () => {
+  await call("PUT", `${BASE}/taller-tienda/conexiones/shadcn`, {});
+  await call("PUT", `${BASE}/taller-tienda/conexiones/neon`, {});
+  const id = await agentId("taller-tienda");
+  const p = await projectOf(db, "tienda");
+  const opts = { project: p, env: { NEON_API_KEY: "neon-demo" }, readOnly: false, planiaDb: "plania", qaBrowser: false };
+  // No npx on this machine: shadcn (a local program) stays out and says why; Neon (remote) still goes.
+  const run = await store.runConnections(db, { id }, { ...opts, hasCommand: () => false });
+  assert.equal(run.servers.shadcn, undefined);
+  assert.ok(run.servers.neon);
+  assert.deepEqual(run.skipped.find((x) => x.server === "shadcn"), { server: "shadcn", why: "no-command" });
+  assert.equal(run.skipped.find((x) => x.server === "neon"), undefined);
+  assert.equal(run.allow.shadcn, undefined);
+  // With npx there, it goes.
+  const ok = await store.runConnections(db, { id }, { ...opts, hasCommand: (c) => c === "npx" });
+  assert.ok(ok.servers.shadcn);
+  // The real lookup: a PATH with no such program, and one with it.
+  assert.equal(store.commandOnPath("npx", "/nonexistent-plania-dir"), false);
+  assert.equal(store.commandOnPath("node", process.env.PATH), true);
+  await call("DELETE", `${BASE}/taller-tienda/conexiones/shadcn`);
+  await call("DELETE", `${BASE}/taller-tienda/conexiones/neon`);
 });
