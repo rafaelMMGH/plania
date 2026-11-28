@@ -33,6 +33,8 @@ export type ConexionTransport =
 export type CatalogEntry = {
   /** The server's name in the run's config and in deny rules: mcp__<id>__<tool>. */
   id: string;
+  /** Who makes and publishes the server (the catalog card says it). */
+  maker: string;
   group: ConexionGroup;
   /** Role templates it is recommended for (product-owner, research, artist, taller, qa). */
   roles: readonly string[];
@@ -61,6 +63,7 @@ const npx = (pkg: string, ...rest: string[]): ConexionTransport => ({ kind: "std
 export const CATALOG: readonly CatalogEntry[] = [
   {
     id: "shadcn",
+    maker: "shadcn",
     group: "interfaz",
     roles: ["taller", "artist"],
     price: "gratis",
@@ -74,6 +77,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: "context7",
+    maker: "Upstash",
     group: "interfaz",
     roles: ["taller", "research"],
     price: "gratis-limite",
@@ -87,6 +91,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: "storybook",
+    maker: "Storybook",
     group: "interfaz",
     roles: ["artist", "qa"],
     price: "gratis",
@@ -101,6 +106,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: "playwright",
+    maker: "Microsoft",
     group: "navegador",
     roles: ["qa", "artist"],
     price: "gratis",
@@ -133,6 +139,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: "chrome-devtools",
+    maker: "Google",
     group: "navegador",
     roles: ["taller", "qa"],
     price: "gratis",
@@ -147,6 +154,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: "github",
+    maker: "GitHub",
     group: "codigo",
     roles: ["product-owner", "taller"],
     price: "gratis",
@@ -161,6 +169,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: "base-prueba",
+    maker: "Crystal DBA",
     group: "codigo",
     roles: ["taller", "qa"],
     price: "gratis",
@@ -177,6 +186,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: "neon",
+    maker: "Neon",
     group: "codigo",
     roles: ["taller"],
     price: "por-confirmar",
@@ -191,6 +201,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: "sentry",
+    maker: "Sentry",
     group: "errores",
     roles: ["taller", "qa"],
     price: "por-confirmar",
@@ -205,6 +216,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: "vercel",
+    maker: "Vercel",
     group: "errores",
     roles: [],
     price: "gratis",
@@ -218,6 +230,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: "figma",
+    maker: "Figma",
     group: "errores",
     roles: ["artist", "taller"],
     price: "pago",

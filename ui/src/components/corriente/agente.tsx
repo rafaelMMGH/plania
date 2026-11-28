@@ -31,7 +31,7 @@ import { refsApi } from "@/lib/references-api";
 import { RefCard, RefPanel, useRefUpload } from "./oficio-refs";
 import { cardLine } from "./organigrama";
 import { SUMAR_PAGE_WORDS } from "@/lib/sumar-page-words";
-import { CatalogPanel, ConexionesTab } from "./conexiones";
+import { CatalogPanel, ConexionesTab, ConnectSheet, ExpertPanel } from "./conexiones";
 import { conexionesApi } from "@/lib/conexiones-api";
 
 export const FICHA_TABS = ["perfil", "motor", "habilidades", "aprendizaje", "conexiones"] as const;
@@ -49,7 +49,10 @@ export type Wide =
   | { kind: "historia" }
   | { kind: "refs" }
   | { kind: "ref"; id: string }
-  | { kind: "catalogo" };
+  | { kind: "catalogo" }
+  // PLA-I75: the connect sheet (from the catalog, or an agent's request), and expert mode.
+  | { kind: "conectar"; server: string; request: string | null }
+  | { kind: "experto" };
 
 export type AgenteLinks = { equipo: string; tab: (t: FichaTab) => string; work: string; store?: string };
 
@@ -397,7 +400,11 @@ export const AgentePanel = ({ p, m, paused, tab, links, onTab, motorLink, openSk
         return r ? <RefCard key={r.id} slug={p.slug} agent={m.agent} seat={seat} r={r} now={Date.now()} onClose={() => setWide({ kind: "refs" })} /> : null;
       }
       case "catalogo":
-        return <CatalogPanel p={p} m={m} seat={seat} onClose={back} />;
+        return <CatalogPanel p={p} m={m} seat={seat} onClose={back} onConnect={(server) => setWide({ kind: "conectar", server, request: null })} onExpert={() => setWide({ kind: "experto" })} />;
+      case "conectar":
+        return <ConnectSheet key={`${wide.server}-${wide.request ?? ""}`} p={p} m={m} seat={seat} server={wide.server} request={wide.request} onBack={() => (wide.request ? back() : setWide({ kind: "catalogo" }))} onDone={back} />;
+      case "experto":
+        return <ExpertPanel p={p} m={m} seat={seat} onClose={back} />;
     }
   };
   return (
@@ -516,7 +523,7 @@ export const AgentePanel = ({ p, m, paused, tab, links, onTab, motorLink, openSk
                 )}
               </>
             )}
-            {tab === "conexiones" && <ConexionesTab p={p} m={m} onCatalog={() => setWide({ kind: "catalogo" })} />}
+            {tab === "conexiones" && <ConexionesTab p={p} m={m} onCatalog={() => setWide({ kind: "catalogo" })} onReview={(server, request) => setWide({ kind: "conectar", server, request })} onExpert={() => setWide({ kind: "experto" })} />}
             {tab === "aprendizaje" && (
               <>
                 <Reading l={lq.data} />

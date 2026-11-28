@@ -663,6 +663,8 @@ export type OrgMember = {
   name?: string;
   reports_to?: string | null;
   lessons?: { active: number; proposed: number };
+  // PLA-I75: how many connections beyond Plania the seat has (src/api/company-org.ts).
+  connections?: number;
   // PLA-I71-3: when the owner paused this seat (null: it works), and a role of the owner's own's title.
   paused_at?: string | null;
   puesto?: string | null;

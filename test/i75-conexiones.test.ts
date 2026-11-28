@@ -405,3 +405,26 @@ test("I75 #16: deny rules follow the version the owner accepted, not a newer cat
   assert.deepEqual(cx.connectionDenyRules(row, false, seen).sort(), ["mcp__github__merge_pull_request", "mcp__github__old_write"]);
   assert.deepEqual(cx.allowedTools(row, false, seen), ["get_me"]);
 });
+
+test("I75 #17: the catalog names its maker and who uses it in the project; the chart counts each seat's connections", async () => {
+  for (const e of cx.CATALOG) assert.ok(e.maker.trim(), `${e.id} has a maker`);
+  assert.equal(cx.catalogEntry("playwright")!.maker, "Microsoft");
+  assert.equal(cx.catalogEntry("base-prueba")!.maker, "Crystal DBA");
+  const r = (await call("GET", `${BASE}/po-tienda/conexiones`)).json;
+  const gh = r.catalog.find((c: Json) => c.id === "github");
+  assert.equal(gh.maker, "GitHub");
+  assert.equal(gh.connected, true);
+  const users = (await raw.query(`select a.slug from agent_connections c join agents a on a.id = c.agent_id where c.server = 'github' order by a.slug`)).rows.map((x: Json) => x.slug);
+  assert.ok(users.includes("po-tienda") && users.includes("taller-tienda"));
+  assert.deepEqual(gh.used_by, users);
+  assert.deepEqual(r.catalog.find((c: Json) => c.id === "figma").used_by, []);
+  assert.deepEqual(gh.readTools, [...cx.catalogEntry("github")!.reads]);
+  assert.equal(gh.remote, true);
+  assert.equal(r.catalog.find((c: Json) => c.id === "shadcn").remote, false);
+  // The chart: one count per seat, the same as the table.
+  const rows = (await raw.query(`select a.slug, count(c.id)::int as n from agents a left join agent_connections c on c.agent_id = a.id where a.slug like '%-tienda' group by a.slug`)).rows as { slug: string; n: number }[];
+  const team = (await call("GET", "/api/company/projects/tienda")).json.team as Json[];
+  assert.ok(team.length > 0);
+  for (const m of team) assert.equal(m.connections, rows.find((x) => x.slug === m.agent)?.n ?? 0, m.agent);
+  assert.ok(team.find((m) => m.agent === "po-tienda")!.connections >= 1);
+});

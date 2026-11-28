@@ -2,10 +2,10 @@
 // its sheet reads, the owner's changes, an agent's request, and what one run gets. The catalog and its rules are in
 // src/runner/conexiones.ts. Every change here is the owner's (the screen's session); a run only asks
 // (request_connection), and nothing on MCP connects, accepts or turns on a tool.
-import { and, asc, desc, eq, gte, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, ne } from "drizzle-orm";
 import { bus } from "../events.js";
 import type { Db } from "../db/client.js";
-import { agentConnections, agentRuns, connectionRequests, projects, type Agent, type AgentConnection, type ConnectionRequest } from "../db/schema.js";
+import { agentConnections, agentRuns, agents, connectionRequests, projects, type Agent, type AgentConnection, type ConnectionRequest } from "../db/schema.js";
 import { ToolError } from "../mcp/errors.js";
 import { appEnvOf, projectOf } from "../maquinas/machines.js";
 import {
@@ -46,17 +46,24 @@ const rowOf = (c: AgentConnection): ConnectionRow => ({ server: c.server, versio
 
 export type CatalogView = {
   id: string;
+  maker: string;
   group: CatalogEntry["group"];
   recommended: boolean;
   price: CatalogEntry["price"];
   version: string;
   keys: { env: string; name: string; optional: boolean }[];
   reads: number;
+  /** The read tools by name (the connect sheet lists them, always on). */
+  readTools: string[];
   writes: string[];
   never: string[];
   unattended: boolean;
   needs: string | null;
+  /** Reached at an address (http) rather than started on this machine. */
+  remote: boolean;
   connected: boolean;
+  /** The seats of this project that have it connected (slugs), this one included. */
+  used_by: string[];
 };
 
 export type KeyView = { env: string; name: string; optional: boolean; set: boolean };
@@ -206,19 +213,32 @@ export async function conexionesRead(db: Db, project: string, agent: string, env
   const { tally, blocked, meta } = await usageOf(db, a.id, new Date(now.getTime() - 7 * DAY));
   const role = roleOf(a);
   const connected = new Set(rows.map((r) => r.server));
+  // Who uses each entry in this project, in one query.
+  const users = await db
+    .select({ server: agentConnections.server, slug: agents.slug })
+    .from(agentConnections)
+    .innerJoin(agents, eq(agents.id, agentConnections.agentId))
+    .where(and(eq(agents.projectId, p.id), ne(agents.status, "retired")))
+    .orderBy(asc(agents.slug));
+  const usedBy = new Map<string, string[]>();
+  for (const u of users) usedBy.set(u.server, [...(usedBy.get(u.server) ?? []), u.slug]);
   const catalog: CatalogView[] = CATALOG.map((e) => ({
     id: e.id,
+    maker: e.maker,
     group: e.group,
     recommended: !!role && e.roles.includes(role),
     price: e.price,
     version: e.version,
     keys: e.keys.map((k) => ({ env: k.env, name: k.name, optional: k.optional })),
     reads: e.reads.length,
+    readTools: [...e.reads],
     writes: [...e.writes],
     never: [...e.never],
     unattended: e.unattended,
     needs: e.needs ?? null,
+    remote: e.transport.kind === "http",
     connected: connected.has(e.id),
+    used_by: usedBy.get(e.id) ?? [],
   }));
   const requests = await db
     .select()
