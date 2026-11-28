@@ -28,7 +28,8 @@ export const registerConnectionTools = (
     {
       description: [
         "Ask the owner for one more tool for your own seat, with the reason, from Plania's reviewed catalog; the owner accepts or declines it on your sheet. Only a run of a seat on that project may (CONNECTION_REQUEST_NO_SEAT).",
-        `server: one of ${CATALOG.map((e) => e.id).join(", ")} (else CONNECTION_UNKNOWN); one you already have is CONNECTION_EXISTS. reason: what the work needs it for, 3-600 characters.`,
+        `server: one of ${CATALOG.filter((e) => e.unattended).map((e) => e.id).join(", ")} (else CONNECTION_UNKNOWN; one that needs an interactive sign-in is CONNECTION_NEEDS_LOGIN); one you already have is CONNECTION_EXISTS. reason: what the work needs it for, 3-600 characters.`,
+        "After the owner declines, the same request is CONNECTION_REQUEST_DECLINED for 30 days (detail: until).",
         "A second request for the same tool returns the open one. An accepted tool reads only and arrives on your next run; nothing on MCP connects a tool or turns on one that writes.",
       ].join(" "),
       inputSchema: { actor, request_id, project: z.string().min(1), server: z.string().min(1).max(40), reason: z.string().min(1).max(600) },

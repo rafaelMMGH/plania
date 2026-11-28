@@ -1153,9 +1153,9 @@ describe("v2 C4: protocol and project text", () => {
     assert.match(text, /set_task Done once it is Merged or Released/);
     assert.match(text, /Won't do and reopening a closed task need a reason/);
     assert.match(text, /Unknown or missing data is caution, never ready/);
-    assert.equal(client.getServerVersion()?.version, "2.26.0");
+    assert.equal(client.getServerVersion()?.version, "2.27.0");
     const p = await call("get_project", { project: "zigzag" });
-    assert.equal(p.protocol_version, "2.26");
+    assert.equal(p.protocol_version, "2.27");
   });
 
   test("set_project edits body and rules with the version; rules_version follows the rules", async () => {

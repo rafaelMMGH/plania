@@ -44,7 +44,7 @@ import { SYSTEM_ACTOR, WEB_ACTOR, writeTx, type Ctx, type Q } from "../mcp/tx.js
 import { reportTokens, type ReportTokensInput } from "../mcp/usage.js";
 import { CONSULTA_DENY_RULES, QA_DENY_RULES, TRIAL_DENY_RULES, afterEditHooks, denySettings, selfRules } from "./deny.js";
 import { isSelfProject, liveDatabaseName, selfRunProblem, serverRoot } from "../self/plania-self.js";
-import { RESERVED_SERVERS, catalogEntry, type McpServerConfig } from "./conexiones.js";
+import { RESERVED_SERVERS, catalogEntry, connectionHook, type McpServerConfig } from "./conexiones.js";
 import { runConnections } from "./conexiones-store.js";
 import { kitLines, skillVersion, writeKitPlugin, type KitWritten } from "./kit.js";
 import { rolePrompt } from "./prompts.js";
@@ -1376,17 +1376,33 @@ async function start(db: Db, run: AgentRun, ctx: WakeContext, deps: RunnerDeps):
   // PLA-I68-4: Camino's commit rules, checked before a builder's run pushes or opens a PR (and after each commit when
   // the owner asked); only once the owner chose them in Camino.
   const commitHook = !readOnly && role === "taller" ? await commitHooks(db, project, tmp, startBranchOf(project.settings)).catch(() => null) : null;
+  // PLA-I75 (Conexiones): the seat's own tools from the catalog, pinned, reading only unless the owner turned a write
+  // tool on (a read-only run gets none). Keys reach the child env only; the config names them as ${NAME}. A trial
+  // carries none. A read that fails leaves the run with Plania alone, and the run's events say so.
+  const conn = trial
+    ? null
+    : await runConnections(db, ctx.agent, { project, env, readOnly, planiaDb: liveDatabaseName(env.DATABASE_URL), qaBrowser: !!qa?.browser }).catch((e: unknown) => {
+        console.warn(`[runner] run ${run.id}: connections not read, Plania only (${e instanceof Error ? e.message : String(e)})`);
+        return { servers: {}, deny: [], allow: {}, env: {}, skipped: [{ server: "*", why: "unknown" as const }] };
+      });
+  // PLA-I75 review: deny rules can only name tools Plania knows; this hook refuses every other tool of a connected server.
+  const allowFile = path.join(tmp, "conexiones-allow.json");
+  const connHook = conn && Object.keys(conn.servers).length ? connectionHook(Object.keys(conn.servers), allowFile) : null;
+  if (connHook) writeFileSync(allowFile, JSON.stringify({ servers: conn!.allow }), { mode: 0o600 });
+  if (conn?.skipped.length) {
+    await db
+      .insert(events)
+      .values({ projectId: project.id, taskKey: run.taskKey, type: "run.connections_skipped", actor: { agent: "plania", session_id: "plania-runner" }, payload: { run_id: run.id, agent: ctx.agent.slug, skipped: conn.skipped } })
+      .catch(() => undefined);
+  }
+  const pre = [...(commitHook?.PreToolUse ?? []), ...(connHook ? [connHook] : [])];
   const hooks =
-    editHooks || commitHook
-      ? { ...(commitHook?.PreToolUse ? { PreToolUse: commitHook.PreToolUse } : {}), ...(editHooks?.PostToolUse || commitHook?.PostToolUse ? { PostToolUse: [...(editHooks?.PostToolUse ?? []), ...(commitHook?.PostToolUse ?? [])] } : {}) }
+    editHooks || commitHook || connHook
+      ? { ...(pre.length ? { PreToolUse: pre } : {}), ...(editHooks?.PostToolUse || commitHook?.PostToolUse ? { PostToolUse: [...(editHooks?.PostToolUse ?? []), ...(commitHook?.PostToolUse ?? [])] } : {}) }
       : undefined;
   // PLA-I2-9: a run of Plania itself also may not reach the live database or apply a migration.
   const self = isSelfProject(repoPathOf(project.slug, project.settings, env), deps.serverRoot ?? serverRoot());
   const laneRules = consulta ? CONSULTA_DENY_RULES : trial ? TRIAL_DENY_RULES : marksReq ? QA_DENY_RULES : role === "qa" || asks ? QA_DENY_RULES : [];
-  // PLA-I75 (Conexiones): the seat's own tools from the catalog, pinned, reading only unless the owner turned a write
-  // tool on (a read-only run gets none). Keys reach the child env only; the config names them as ${NAME}. A trial
-  // carries none.
-  const conn = trial ? null : await runConnections(db, ctx.agent, { project, env, readOnly, planiaDb: liveDatabaseName(env.DATABASE_URL), qaBrowser: !!qa?.browser }).catch(() => null);
   const connDeny = conn?.deny ?? [];
   writeFileSync(settingsPath, JSON.stringify({ ...denySettings([...(self ? [...laneRules, ...selfRules(liveDatabaseName(env.DATABASE_URL))] : laneRules), ...connDeny]), ...(hooks ? { hooks } : {}) }), { mode: 0o600 });
   const mcpConfigPath = path.join(tmp, "mcp.json");

@@ -284,3 +284,124 @@ test("I75 #10: the run log counts each mcp__ call as ran, failed or blocked, fro
   assert.deepEqual(c7.usage, { calls: 2, failed: 1, blocked: 0, runs: 1, tools: [{ tool: "get-library-docs", ok: 1, failed: 0, blocked: 0 }, { tool: "resolve-library-id", ok: 0, failed: 1, blocked: 0 }] });
   assert.deepEqual(r.json.blocked.map((b: Json) => `${b.server}:${b.tool}:${b.n}:${b.task}`), ["github:create_issue:1:TND-1"]);
 });
+
+// ---- PLA-I75 review fixes
+
+const { spawnSync } = await import("node:child_process");
+const { mkdtempSync, writeFileSync: writeFile } = await import("node:fs");
+const { tmpdir } = await import("node:os");
+const pathMod = await import("node:path");
+
+test("I75 #11: a run may call only its allowlist; the hook refuses any other tool of a connected server, even one the catalog never listed", async () => {
+  const id = await agentId("artist-tienda");
+  const p = await projectOf(db, "tienda");
+  const env = { GITHUB_PERSONAL_ACCESS_TOKEN: "ghp_fake_value", DATABASE_URI: "postgres://localhost/tienda_prueba" };
+  const r = await store.runConnections(db, { id }, { project: p, env, readOnly: false, planiaDb: "plania", qaBrowser: false });
+  assert.ok(r.allow.github!.includes("create_issue"), "the write the owner turned on");
+  assert.ok(r.allow.github!.includes("get_pull_request"), "reads");
+  assert.ok(!r.allow.github!.includes("push_files") && !r.allow.github!.includes("merge_pull_request"));
+  const ro = await store.runConnections(db, { id }, { project: p, env, readOnly: true, planiaDb: "plania", qaBrowser: false });
+  assert.ok(!ro.allow.github!.includes("create_issue"), "a read-only run gets no write");
+  assert.deepEqual(ro.allow["mi-mcp"], [], "a custom server with no named tools runs nothing");
+
+  const hook = cx.connectionHook(Object.keys(r.servers), "/tmp/x.json")!;
+  assert.match(hook.matcher, /^\^mcp__\(/);
+  assert.ok(new RegExp(hook.matcher).test("mcp__base-prueba__execute_sql"));
+  assert.ok(!new RegExp(hook.matcher).test("mcp__plania__start"));
+
+  const dir = mkdtempSync(pathMod.join(tmpdir(), "i75-hook-"));
+  const file = pathMod.join(dir, "allow.json");
+  writeFile(file, JSON.stringify({ servers: r.allow }));
+  const callHook = (tool: string) => spawnSync(process.execPath, [cx.CONNECTION_HOOK_SCRIPT, file], { input: JSON.stringify({ tool_name: tool, tool_input: {} }), encoding: "utf8" });
+  assert.equal(callHook("mcp__github__get_pull_request").status, 0);
+  assert.equal(callHook("mcp__github__create_issue").status, 0);
+  const unlisted = callHook("mcp__github__delete_repository");
+  assert.equal(unlisted.status, 2, "a tool the catalog never listed is refused");
+  assert.match(unlisted.stderr, /not allowed on the github connection/);
+  assert.equal(callHook("mcp__github__push_files").status, 2);
+  assert.equal(callHook("mcp__plania__start").status, 0, "Plania's own tools are not this hook's");
+  assert.equal(callHook("Bash").status, 0);
+  assert.equal(spawnSync(process.execPath, [cx.CONNECTION_HOOK_SCRIPT, pathMod.join(dir, "missing.json")], { input: JSON.stringify({ tool_name: "mcp__github__get_pull_request" }), encoding: "utf8" }).status, 2, "no list, no connected tool");
+});
+
+test("I75 #12: an optional key stays optional; a key may not name one of Plania's own variables", async () => {
+  const id = await agentId("taller-tienda");
+  const p = await projectOf(db, "tienda");
+  assert.equal((await call("PUT", `${BASE}/taller-tienda/conexiones/context7`, {})).status, 200);
+  const sheet = await call("GET", `${BASE}/taller-tienda/conexiones`);
+  assert.equal(sheet.json.connections.find((c: Json) => c.server === "context7").problem, null);
+  const without = await store.runConnections(db, { id }, { project: p, env: {}, readOnly: false, planiaDb: "plania", qaBrowser: false });
+  assert.ok(without.servers.context7, "runs without its optional key");
+  assert.doesNotMatch(JSON.stringify(without.servers.context7), /\$\{/);
+  const withKey = await store.runConnections(db, { id }, { project: p, env: { CONTEXT7_API_KEY: "c7_fake" }, readOnly: false, planiaDb: "plania", qaBrowser: false });
+  assert.equal(withKey.env.CONTEXT7_API_KEY, "c7_fake");
+  for (const bad of ["DATABASE_URL", "PLANIA_RUNNER_TOKEN", "SESSION_SECRET", "GITHUB_TOKEN"]) {
+    const r = await call("PUT", `${BASE}/taller-tienda/conexiones/github`, { keys: { GITHUB_PERSONAL_ACCESS_TOKEN: bad } });
+    assert.equal(r.json.error, "CONNECTION_INVALID", bad);
+  }
+  assert.equal(cx.isKeyName("PLANIA_X"), false);
+  assert.equal(cx.isKeyName("MY_GITHUB_RO"), true);
+});
+
+test("I75 #13: a declined request waits 30 days; a tool that needs a sign-in cannot be asked for", async () => {
+  const [a, b] = InMemoryTransport.createLinkedPair();
+  await createMcpServer(db).connect(b);
+  const client = new Client({ name: "t", version: "0" });
+  await client.connect(a);
+  const ask = async (server: string) => {
+    const r = (await client.callTool({ name: "request_connection", arguments: { actor: { agent: "research-tienda", session_id: "s-r" }, project: "tienda", server, reason: "La necesito para revisar issues." } })) as { content: { text: string }[] };
+    return JSON.parse(r.content[0]!.text) as Json;
+  };
+  const held = await ask("github");
+  assert.equal(held.error, "CONNECTION_REQUEST_DECLINED", "declined in #9");
+  assert.ok(Date.parse(held.until) > Date.now() + 29 * 24 * 3600 * 1000);
+  await raw.query(`update connection_requests set decided_at = now() - interval '31 days' where server = 'github' and state = 'declined'`);
+  assert.equal((await ask("github")).request.state, "proposed", "asks again after 30 days");
+  assert.equal((await ask("vercel")).error, "CONNECTION_NEEDS_LOGIN");
+});
+
+test("I75 #14: the connect sheet connects several seats at once, with the writes it turned on, or none of them", async () => {
+  const many = await call("PUT", `${BASE}/po-tienda/conexiones/github`, { agents: ["taller-tienda"], writes: ["create_issue"], keys: { GITHUB_PERSONAL_ACCESS_TOKEN: "MY_GITHUB_RO" } });
+  assert.equal(many.status, 200, JSON.stringify(many.json));
+  for (const seat of ["po-tienda", "taller-tienda"]) {
+    const c = (await call("GET", `${BASE}/${seat}/conexiones`)).json.connections.find((x: Json) => x.server === "github");
+    assert.ok(c, seat);
+    assert.deepEqual(c.writes.filter((w: Json) => w.on).map((w: Json) => w.tool), ["create_issue"]);
+    assert.equal(c.keys.find((k: Json) => k.env === "GITHUB_PERSONAL_ACCESS_TOKEN").name, "MY_GITHUB_RO");
+  }
+  const never = await call("PUT", `${BASE}/po-tienda/conexiones/sentry`, { agents: ["taller-tienda"], writes: ["merge_pull_request"] });
+  assert.ok(never.status >= 400);
+  for (const seat of ["po-tienda", "taller-tienda"]) assert.ok(!(await call("GET", `${BASE}/${seat}/conexiones`)).json.connections.some((x: Json) => x.server === "sentry"), "all or none");
+  // The request's yes takes the sheet's choices too.
+  const [ca, cb] = InMemoryTransport.createLinkedPair();
+  await createMcpServer(db).connect(cb);
+  const client = new Client({ name: "t", version: "0" });
+  await client.connect(ca);
+  const asked = (await client.callTool({ name: "request_connection", arguments: { actor: { agent: "taller-tienda", session_id: "s-t" }, project: "tienda", server: "chrome-devtools", reason: "Ver la consola del navegador." } })) as { content: { text: string }[] };
+  const req = (JSON.parse(asked.content[0]!.text) as Json).request;
+  const yes = await call("POST", `${BASE}/taller-tienda/conexiones-pedidos/${req.id}`, { accept: true, writes: ["evaluate_script"] });
+  assert.equal(yes.status, 200, JSON.stringify(yes.json));
+  assert.deepEqual(yes.json.connections.find((c: Json) => c.server === "chrome-devtools").writes.filter((w: Json) => w.on).map((w: Json) => w.tool), ["evaluate_script"]);
+});
+
+test("I75 #15: expert mode shows what the next run gets, without values; disconnecting keeps the week's history", async () => {
+  const prev = await call("GET", `${BASE}/research-tienda/conexiones/corrida`);
+  assert.equal(prev.status, 200, JSON.stringify(prev.json));
+  assert.ok(prev.json.servers.context7);
+  assert.ok(Array.isArray(prev.json.allow.context7));
+  assert.doesNotMatch(JSON.stringify(prev.json), /ghp_fake|c7_fake/);
+  assert.equal((await call("POST", `${BASE}/research-tienda/conexiones-propias`, { server: "corrida", package: "@acme/x", version: "1.0.0" })).json.error, "CONNECTION_INVALID");
+
+  const before = (await call("GET", `${BASE}/research-tienda/conexiones`)).json;
+  assert.ok(before.connections.find((c: Json) => c.server === "context7").recent.length >= 1, "the run of #10");
+  const after = await call("DELETE", `${BASE}/research-tienda/conexiones/context7`);
+  assert.ok(!after.json.connections.some((c: Json) => c.server === "context7"));
+  assert.ok(after.json.past.some((x: Json) => x.server === "context7" && x.calls === 2), "the calls stay visible");
+});
+
+test("I75 #16: deny rules follow the version the owner accepted, not a newer catalog", () => {
+  const row = { server: "github", version: "0.0.1", keys: {}, writesOn: [], custom: null, reviewed: true };
+  const seen = { reads: ["get_me"], writes: ["old_write"], never: ["merge_pull_request"] };
+  assert.deepEqual(cx.connectionDenyRules(row, false, seen).sort(), ["mcp__github__merge_pull_request", "mcp__github__old_write"]);
+  assert.deepEqual(cx.allowedTools(row, false, seen), ["get_me"]);
+});

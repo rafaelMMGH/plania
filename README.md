@@ -656,7 +656,7 @@ before Plania runs, as a plain-text tool error (`INVALID_INPUT`). The catalog is
 | `CAMINO_KEY_INVALID` | 400 | camino: the pasted key has spaces, quotes or a label in it, or is shorter than 8 characters; nothing was saved |
 | `CAMINO_KEY_REJECTED` | 400 | camino: the service refused the key on its read-only test; nothing was saved (detail: status, message: the service's own words) |
 | `CAMINO_PROVIDER_UNKNOWN` | 400 | camino: no key can be saved for that service; it is Detected or Manual, or not a service Camino knows (detail: provider) |
-| `CONNECTION_INVALID` | 400 | a connection field is wrong: a key name (A-Z, digits, _), a write tool the entry does not have, a reason of 3-600 characters, or a custom server that is not an npm package at an exact version (detail: field) |
+| `CONNECTION_INVALID` | 400 | a connection field is wrong: a key name (A-Z, digits, _, not one of Plania's own variables), a write tool the entry does not have, a reason of 3-600 characters, or a custom server that is not an npm package at an exact version (detail: field) |
 | `DELEGATION_EVIDENCE` | 400 | a delegated answer or a Won't do / reopen move needs delegated_by_owner.message_id (8 to 200 characters) and a quote of 8 to 280 characters; empty or short evidence is refused |
 | `DEPLOY_SOURCE_REQUIRED` | 400 | set_env deployed needs a source {provider, deployment_id, url}: the server stores where the time came from |
 | `FETCH_ADDRESS_REFUSED` | 400 | safe fetch: the host is or resolves to a loopback, private, link-local, metadata or reserved address; nothing was sent (detail: address, reason) |
@@ -783,6 +783,7 @@ before Plania runs, as a plain-text tool error (`INVALID_INPUT`). The catalog is
 | `CONNECTION_EXISTS` | 409 | this seat already has a connection with that name |
 | `CONNECTION_NEEDS_LOGIN` | 409 | that server needs an interactive sign-in, so an unattended run cannot use it |
 | `CONNECTION_REQUEST_DECIDED` | 409 | the connection request was already accepted or declined |
+| `CONNECTION_REQUEST_DECLINED` | 409 | the owner declined this connection for this seat less than 30 days ago; the same request waits until then (detail: until) |
 | `DECISION_RETIRED` | 409 | the decision was retired: it cannot be superseded, pinned or retired again |
 | `DELEGATION_LIMIT` | 409 | delegated answers and Won't do or reopen moves are limited to 10 per hour, and one answer per question |
 | `DOC_EXISTS` | 409 | attach_doc without version for a title that exists (detail: doc_id, version): pass version to replace |

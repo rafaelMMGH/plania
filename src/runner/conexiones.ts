@@ -16,6 +16,9 @@
 // - Nothing is written to the project's repo.
 // The words the owner reads (what each one is for, its notes) live in ui/src/lib/conexiones-words.ts.
 
+import path from "node:path";
+import { isPlaniaOwn } from "./run-env.js";
+
 export type ConexionGroup = "interfaz" | "navegador" | "codigo" | "errores";
 export type ConexionPrice = "gratis" | "gratis-limite" | "por-confirmar" | "pago";
 
@@ -236,17 +239,21 @@ export const isPinned = (version: string, remote = false): boolean => SEMVER.tes
 
 /** A server name a run may carry: lower case, digits and dashes; not Plania's own and not the QA browser's. */
 export const SERVER_NAME = /^[a-z][a-z0-9-]{1,39}$/;
-export const RESERVED_SERVERS = new Set(["plania", "browser"]);
+export const RESERVED_SERVERS = new Set(["plania", "browser", "corrida"]);
 
 /** A custom server (expert mode): an npm package at an exact version, started with npx. Unreviewed until accepted. */
-export type CustomSpec = { package: string; version: string; args: string[] };
+// allow: the tools the owner lets it call, by name (PLA-I75 review): a custom server's tools are not known to Plania, so
+// none runs until the owner names it.
+export type CustomSpec = { package: string; version: string; args: string[]; allow?: string[] };
+const TOOL_NAME = /^[A-Za-z0-9_.-]{1,80}$/;
 const NPM_NAME = /^(@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
-export function customProblem(id: string, spec: CustomSpec): "name" | "package" | "version" | "args" | null {
+export function customProblem(id: string, spec: CustomSpec): "name" | "package" | "version" | "args" | "allow" | null {
   if (!SERVER_NAME.test(id) || RESERVED_SERVERS.has(id) || catalogEntry(id)) return "name";
   if (!NPM_NAME.test(spec.package) || spec.package.length > 120) return "package";
   if (!isPinned(spec.version)) return "version";
   // No key values, no shell: plain flags only, and nothing that looks like a secret.
   if (spec.args.length > 12 || spec.args.some((a) => a.length > 120 || !/^[A-Za-z0-9@._:/=-]+$/.test(a) || /(token|secret|password|key)=/i.test(a))) return "args";
+  if ((spec.allow ?? []).length > 40 || (spec.allow ?? []).some((t) => !TOOL_NAME.test(t))) return "allow";
   return null;
 }
 
@@ -265,10 +272,12 @@ export type McpServerConfig =
   | { type: "http"; url: string; headers?: Record<string, string> };
 
 const KEY_NAME = /^[A-Z_][A-Z0-9_]{0,79}$/;
-export const isKeyName = (name: string): boolean => KEY_NAME.test(name);
+// PLA-I75 review: a connection may not name one of Plania's own variables (its database, its tokens, PLANIA_*): their
+// values would reach a run's environment past run-env's filter.
+export const isKeyName = (name: string): boolean => KEY_NAME.test(name) && !isPlaniaOwn(name);
 
 /** The server block of one connection for a run's --mcp-config. Keys appear only as ${NAME}, in env or a header. */
-export function serverConfig(c: ConnectionRow): McpServerConfig | null {
+export function serverConfig(c: ConnectionRow, has: (name: string) => boolean = () => true): McpServerConfig | null {
   if (c.custom) {
     if (!c.reviewed || customProblem(c.server, c.custom)) return null;
     return { command: "npx", args: ["-y", `${c.custom.package}@${c.custom.version}`, ...c.custom.args] };
@@ -280,35 +289,72 @@ export function serverConfig(c: ConnectionRow): McpServerConfig | null {
     if (!isPinned(c.version)) return null;
     const env: Record<string, string> = {};
     for (const k of e.keys) {
-      const name = c.keys[k.env] ?? (k.optional ? null : k.name);
-      if (name && isKeyName(name)) env[k.env] = `\${${name}}`;
+      const name = c.keys[k.env] ?? k.name;
+      // An optional key with no value is left out: the server runs without it (PLA-I75 review).
+      if (isKeyName(name) && (!k.optional || has(name))) env[k.env] = `\${${name}}`;
     }
     return { command: t.command, args: t.args.map((a) => a.replaceAll("{version}", c.version)), ...(Object.keys(env).length ? { env } : {}) };
   }
   const headers: Record<string, string> = {};
   for (const k of e.keys.filter((k) => k.header)) {
     const name = c.keys[k.env] ?? k.name;
-    if (isKeyName(name)) headers.Authorization = `Bearer \${${name}}`;
+    if (isKeyName(name) && (!k.optional || has(name))) headers.Authorization = `Bearer \${${name}}`;
   }
   const writing = c.writesOn.some((w) => e.writes.includes(w));
   return { type: "http", url: writing && t.writeUrl ? t.writeUrl : t.url, ...(Object.keys(headers).length ? { headers } : {}) };
 }
 
-/** The key names a connection needs in the run's environment (the values come from the server's env or Llaves). */
-export function keyNamesOf(c: ConnectionRow): string[] {
-  if (c.custom) return [];
+/** The key names a connection reads (the values come from the server's env or Llaves): the ones it needs, and the
+ *  optional ones it uses when they have a value. */
+export function keyNamesOf(c: ConnectionRow): { required: string[]; optional: string[] } {
+  const out = { required: [] as string[], optional: [] as string[] };
+  if (c.custom) return out;
   const e = catalogEntry(c.server);
-  if (!e) return [];
-  return e.keys.map((k) => c.keys[k.env] ?? (k.optional ? null : k.name)).filter((n): n is string => !!n && isKeyName(n));
+  if (!e) return out;
+  for (const k of e.keys) {
+    const name = c.keys[k.env] ?? k.name;
+    if (isKeyName(name)) (k.optional ? out.optional : out.required).push(name);
+  }
+  return out;
 }
 
-/** Deny rules for one connection: every write tool not turned on, and every never tool. readOnly: all writes. */
-export function connectionDenyRules(c: ConnectionRow, readOnly = false): string[] {
-  if (c.custom) return [];
+/** The tools of the version this connection runs: what the owner accepted (seen), else the catalog's. A run on an
+ *  older version keeps that version's lists until the owner accepts the new one (PLA-I75 review). */
+const toolsOf = (c: ConnectionRow, seen: ToolsSnapshot | null): ToolsSnapshot | null => {
   const e = catalogEntry(c.server);
-  if (!e) return [];
-  const off = e.writes.filter((w) => readOnly || !c.writesOn.includes(w));
-  return [...off, ...e.never].map((t) => `mcp__${e.id}__${t}`);
+  if (!e) return null;
+  return seen && c.version !== e.version ? seen : snapshotOf(e);
+};
+
+/** Deny rules for one connection: every write tool not turned on, and every never tool. readOnly: all writes. */
+export function connectionDenyRules(c: ConnectionRow, readOnly = false, seen: ToolsSnapshot | null = null): string[] {
+  if (c.custom) return [];
+  const t = toolsOf(c, seen);
+  if (!t) return [];
+  const off = t.writes.filter((w) => readOnly || !c.writesOn.includes(w));
+  return [...off, ...t.never].map((tool) => `mcp__${c.server}__${tool}`);
+}
+
+/**
+ * The only tools a run may call on this connection: its reads and the write tools the owner turned on (none on a
+ * read-only run); for a custom server, the tools the owner named. Deny rules can only list names Plania knows, so a
+ * server that grows a write tool the catalog never listed would get through them; the run's PreToolUse hook
+ * (scripts/conexiones-tool-hook.mjs) refuses every call not on this list (PLA-I75 review).
+ */
+export function allowedTools(c: ConnectionRow, readOnly = false, seen: ToolsSnapshot | null = null): string[] {
+  if (c.custom) return readOnly ? [] : [...(c.custom.allow ?? [])].sort();
+  const t = toolsOf(c, seen);
+  if (!t) return [];
+  const on = readOnly ? [] : c.writesOn.filter((w) => t.writes.includes(w));
+  return [...new Set([...t.reads, ...on])].sort();
+}
+
+/** The run's hook entry: one PreToolUse matcher over this run's connected servers, reading the allow file. */
+export const CONNECTION_HOOK_SCRIPT = path.resolve(import.meta.dirname, "../../scripts/conexiones-tool-hook.mjs");
+export function connectionHook(servers: string[], allowFile: string): { matcher: string; hooks: { type: "command"; command: string; timeout: number }[] } | null {
+  const ids = servers.filter((s) => SERVER_NAME.test(s));
+  if (!ids.length) return null;
+  return { matcher: `^mcp__(${ids.join("|")})__.*`, hooks: [{ type: "command", command: `node ${JSON.stringify(CONNECTION_HOOK_SCRIPT)} ${JSON.stringify(allowFile)}`, timeout: 15 }] };
 }
 
 /** The tools a version shows: what the owner accepted is stored, so a change is read before it is accepted. */

@@ -74,7 +74,7 @@ export const ERRORS = {
   PUESTO_INVALID: [400, "a role of the owner's own needs a title (1-60 characters), a line (up to 200) and a base role from the catalog (detail: field)"],
   MANAGER_NOT_ON_TEAM: [400, "a seat can report only to the owner or to a seat of the same project's team"],
   // PLA-I75: Conexiones.
-  CONNECTION_INVALID: [400, "a connection field is wrong: a key name (A-Z, digits, _), a write tool the entry does not have, a reason of 3-600 characters, or a custom server that is not an npm package at an exact version (detail: field)"],
+  CONNECTION_INVALID: [400, "a connection field is wrong: a key name (A-Z, digits, _, not one of Plania's own variables), a write tool the entry does not have, a reason of 3-600 characters, or a custom server that is not an npm package at an exact version (detail: field)"],
   // 403: only the owner may do this.
   SEAT_PROPOSAL_NOT_PO: [403, "propose_seat: only the project's product owner proposes a seat; runs never create, change or retire seats"],
   CONNECTION_REQUEST_NO_SEAT: [403, "request_connection: only a run of a seat on that project asks for a connection, for itself; runs never connect, accept or turn on a tool"],
@@ -122,6 +122,7 @@ export const ERRORS = {
   CONNECTION_EXISTS: [409, "this seat already has a connection with that name"],
   CONNECTION_REQUEST_DECIDED: [409, "the connection request was already accepted or declined"],
   CONNECTION_NEEDS_LOGIN: [409, "that server needs an interactive sign-in, so an unattended run cannot use it"],
+  CONNECTION_REQUEST_DECLINED: [409, "the owner declined this connection for this seat less than 30 days ago; the same request waits until then (detail: until)"],
   ALREADY_SUPERSEDED: [409, "the decision named in supersedes was already reversed (detail: superseded_by)"],
   BLOCKER_NOT_WITHDRAWABLE: [409, "set_task withdraw_blocker: not a pending blocker parsed from a note on this task, or another session's note (detail: reason)"],
   BRANCH_IN_USE: [409, "the branch belongs to another live initiative (detail: owner_key); pass share_branch: true with a reason to share it"],
