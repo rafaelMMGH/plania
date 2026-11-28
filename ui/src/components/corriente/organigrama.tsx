@@ -16,13 +16,15 @@ const DotMark = ({ d }: { d: Dot }) => <i className={`org-dot ${d}`} aria-hidden
 
 function tagsOf(m: OrgMember) {
   const w = words(ORGANIGRAMA_WORDS);
-  const tags: { t: string; tone?: "vi" | "am" | "motor"; title?: string }[] = [];
+  const tags: { t: string; tone?: "vi" | "am" | "ok" | "motor"; title?: string }[] = [];
   // Skills and lessons first and whole; the motor's model last: a tag that does not fit drops out whole (the panel has
   // everything), never cut in half.
   tags.push({ t: w.skills(m.skills_on ?? 0), tone: "vi" });
   const waiting = m.lessons?.proposed ?? 0;
   if (waiting) tags.push({ t: waiting === 1 ? w.lessonWaits : w.lessonsWait(waiting), tone: "am" });
   else tags.push({ t: w.lessons(m.lessons?.active ?? 0) });
+  // PLA-I75: its connections beyond Plania, when it has any.
+  if ((m.connections ?? 0) > 0) tags.push({ t: w.connections(m.connections!), tone: "ok" });
   if (m.motor && (m.motor.model || m.motor.effort)) {
     const full = motorLine(m.motor.model, m.motor.effort);
     tags.push({ t: full.split(" · ")[0]!, tone: "motor", title: full });

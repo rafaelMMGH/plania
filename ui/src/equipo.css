@@ -249,3 +249,123 @@ button.org-card:focus-visible { outline: 2px solid var(--cor-violet-2); outline-
 .agt:not(.wide) .ofi-teach-modes { display: none; }
 .agt .ofi-teach { flex-wrap: wrap; padding: 8px 0 0; border-radius: 0; border-width: 1px 0 0; background: transparent; }
 .agt .ofi-budget > .cor-cap:not(.cor-state) { display: none; }
+
+/* PLA-I75 (Conexiones): a seat's fifth tab and the catalog it widens to. Amber is what waits on the owner. */
+/* Five tabs fit the narrow sheet; on a narrower one the bar scrolls instead of squeezing. */
+.agt-tabs { flex-shrink: 0; gap: 0; overflow-x: auto; scrollbar-width: none; }
+.agt-tab { flex: 1 0 auto; padding: 0 5px; font-size: 12.5px; }
+.cnx { display: flex; flex-direction: column; gap: 12px; }
+.cnx-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.cnx-request { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; border: 1px dashed rgba(255, 180, 84, 0.45); background: rgba(255, 180, 84, 0.04); }
+.cnx-request .cor-text { margin: 0; font-size: 13px; }
+.cnx-cable { display: flex; flex-direction: column; gap: 6px; padding: 12px; }
+.cnx-cable.amber { border-color: rgba(255, 180, 84, 0.55); }
+.cnx-cable > .cor-btn.quiet { align-self: flex-start; }
+.cnx-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cnx-head > b { color: var(--cor-text); font-size: 14px; }
+.cnx-warn { color: var(--cor-amber); }
+.cnx-change { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 10px; background: rgba(255, 180, 84, 0.06); }
+.cnx-change .cor-btn { align-self: flex-start; }
+.cnx-tools { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.cnx-tools li { display: flex; justify-content: space-between; gap: 12px; min-height: 32px; align-items: center; border-bottom: 1px solid var(--cor-line); font-size: 12.5px; }
+.cnx-tools .cor-mono { overflow: hidden; text-overflow: ellipsis; }
+.cnx-did summary, .cnx-expert summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
+.cnx-writes { display: flex; flex-direction: column; gap: 6px; }
+.cnx-writes .cor-switch { justify-content: flex-start; }
+.cnx-catalog { display: flex; flex-direction: column; gap: 14px; }
+.cnx-section { display: flex; flex-direction: column; gap: 8px; }
+.cnx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.cnx-entry { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 12px; border: 1px solid var(--cor-line); background: rgba(255, 255, 255, 0.02); }
+.cnx-entry.off { opacity: 0.72; }
+.cnx-entry > .cor-btn { align-self: flex-start; margin-top: auto; }
+.cnx-expert { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; border: 1px dashed var(--cor-line-strong); }
+.cnx-expert[open] { gap: 8px; }
+
+/* PLA-I75 screen pass: the board. The seat on the left, one wire per connection (its width = calls in 7 days), a
+   plug per connection on the right; Plania's plug is fixed; a request is an amber dashed wire. */
+.cnx-board { position: relative; flex: none; height: 210px; border-radius: 12px; border: 1px solid var(--cor-line); background: radial-gradient(120% 90% at 0% 50%, rgba(139, 92, 246, 0.1), transparent 60%), rgba(255, 255, 255, 0.012); overflow: hidden; }
+.cnx-board svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.cnx-me { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 4px; max-width: 80px; }
+.cnx-me .org-glyph { width: 40px; height: 40px; font-size: 13px; background: var(--cor-raised); box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.18), 0 0 22px rgba(139, 92, 246, 0.25); }
+.cnx-me > span:last-child { font-family: var(--cor-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--cor-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px; }
+.cnx-plug { position: absolute; right: 10px; z-index: 1; display: flex; align-items: center; gap: 7px; height: 26px; max-width: 200px; padding: 0 9px 0 3px; border-radius: 8px; border: 1px solid var(--cor-line-strong); background: var(--cor-raised); color: var(--cor-text); font: inherit; font-size: 12px; transform: translateY(-50%); white-space: nowrap; }
+button.cnx-plug { cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+button.cnx-plug:hover { border-color: rgba(167, 139, 250, 0.5); }
+button.cnx-plug:focus-visible { outline: 2px solid var(--cor-violet-2); outline-offset: 2px; }
+.cnx-plug.sel { border-color: var(--cor-violet-2); background: rgba(139, 92, 246, 0.14); }
+.cnx-plug.fixed { color: var(--cor-body); }
+.cnx-plug.amber { border-color: rgba(255, 180, 84, 0.55); }
+.cnx-plug.ask { border-style: dashed; border-color: rgba(255, 180, 84, 0.6); color: var(--cor-amber); background: rgba(255, 180, 84, 0.06); }
+.cnx-plug b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+.cnx-plug small { font-family: var(--cor-mono); font-size: 10.5px; color: var(--cor-muted); }
+.cnx-plug.fixed:not(:has(b)) { padding: 0 9px; }
+.cnx-mark { flex: none; width: 20px; height: 20px; border-radius: 6px; display: inline-grid; place-items: center; background: rgba(139, 92, 246, 0.16); color: var(--cor-violet-3); font-family: var(--cor-mono); font-size: 9.5px; font-weight: 600; }
+.cnx-mark.big { width: 34px; height: 34px; border-radius: 9px; font-size: 12px; }
+.cnx-wire { fill: none; stroke: var(--cor-violet-2); stroke-linecap: round; opacity: 0.55; }
+.cnx-wire.fixed { stroke: var(--cor-line-strong); opacity: 1; }
+.cnx-wire.amber { stroke: var(--cor-amber); opacity: 0.45; }
+.cnx-wire.ask { stroke: var(--cor-amber); stroke-dasharray: 3 5; opacity: 0.8; }
+.cnx-flow { fill: none; stroke: var(--cor-violet-4); stroke-linecap: round; stroke-dasharray: 2 22; animation: cnx-flow 1.6s linear infinite; }
+.cnx-flow.slow { animation-duration: 3.2s; }
+@keyframes cnx-flow { to { stroke-dashoffset: -24; } }
+@media (prefers-reduced-motion: reduce) { .cnx-flow { animation: none; } }
+.cnx-board-cap { position: absolute; left: 12px; right: 12px; bottom: 8px; display: flex; justify-content: space-between; gap: 8px; font-family: var(--cor-mono); font-size: 10.5px; letter-spacing: 0.04em; color: var(--cor-muted); pointer-events: none; }
+.cnx-cable.sel { border-color: var(--cor-violet-2); }
+.cnx-cable:focus { outline: none; }
+.cnx-cable:focus-visible { outline: 2px solid var(--cor-violet-2); outline-offset: 2px; }
+.cnx-bad { color: var(--cor-red); }
+.cnx-recent { display: flex; flex-direction: column; gap: 4px; }
+.cnx-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.cnx-log li { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 30px; border-bottom: 1px solid var(--cor-line); font-size: 12.5px; color: var(--cor-body); }
+.cnx-log time { font-family: var(--cor-mono); font-size: 10.5px; color: var(--cor-muted); }
+.cnx-log .cor-mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cnx-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cnx-actions .cor-btn { justify-content: center; }
+/* Catalog cards: who makes it, what it costs, who uses it; connected ones stay, marked. */
+.cnx-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.cnx-chip { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.05); color: var(--cor-body); font-family: var(--cor-mono); font-size: 10.5px; white-space: nowrap; }
+.cnx-chip.ok { background: rgba(110, 231, 160, 0.12); color: var(--cor-green); }
+.cnx-chip.vi { background: rgba(139, 92, 246, 0.14); color: var(--cor-violet-3); }
+.cnx-chip.am { background: rgba(255, 180, 84, 0.12); color: var(--cor-amber); }
+.cnx-chip.rd { background: rgba(255, 122, 122, 0.12); color: var(--cor-red); }
+.cnx-entry.on { border-color: rgba(110, 231, 160, 0.3); }
+.cnx-entry.rec { background: linear-gradient(180deg, rgba(139, 92, 246, 0.08), transparent 70%), rgba(255, 255, 255, 0.02); }
+.cnx-entry-top { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: center; }
+.cnx-entry-top > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.cnx-entry-top b { color: var(--cor-text); font-size: 14px; font-weight: 600; }
+.cnx-entry-top .cnx-mark { width: 28px; height: 28px; border-radius: 8px; }
+.cnx-entry-top .cnx-mark.big { width: 34px; height: 34px; }
+.cnx-entry-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: auto; padding-top: 4px; }
+.cnx-who { display: flex; gap: 3px; min-width: 0; }
+.cnx-who i { width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; background: rgba(255, 255, 255, 0.07); color: var(--cor-body); font-family: var(--cor-mono); font-size: 8.5px; font-style: normal; text-transform: uppercase; }
+/* The connect sheet and expert mode: the steps beside a summary. */
+.cnx-sheet { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 18px; align-items: start; }
+.cnx-sheet-title { font-size: 16px !important; }
+.cnx-step { display: flex; flex-direction: column; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--cor-line); }
+.cnx-step:last-child { border-bottom: 0; }
+.cnx-step-h { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 500; color: var(--cor-text); }
+.cnx-step-h i { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: rgba(139, 92, 246, 0.18); color: var(--cor-violet-3); font-family: var(--cor-mono); font-size: 10.5px; font-style: normal; }
+.cnx-perm { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; max-height: 300px; overflow: auto; }
+.cnx-perm li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; border-bottom: 1px solid var(--cor-line); font-size: 12.5px; }
+.cnx-perm .cor-switch { min-height: 38px; font-family: var(--cor-mono); font-size: 12px; }
+.cnx-perm li.never { color: var(--cor-muted); }
+.cnx-pick { display: flex; flex-wrap: wrap; gap: 6px; }
+.cnx-pick button { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--cor-line); background: none; color: var(--cor-body); font: inherit; font-size: 12.5px; cursor: pointer; }
+.cnx-pick button[aria-pressed="true"] { border-color: rgba(167, 139, 250, 0.6); background: rgba(139, 92, 246, 0.12); color: var(--cor-text); }
+.cnx-pick button:disabled { cursor: default; }
+.cnx-pick .org-glyph { width: 20px; height: 20px; font-size: 8.5px; border-radius: 6px; }
+.cnx-side { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 12px; border: 1px solid var(--cor-line); background: rgba(255, 255, 255, 0.015); }
+.cnx-side dl { margin: 0; display: flex; flex-direction: column; }
+.cnx-side dl div { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 32px; border-bottom: 1px solid var(--cor-line); font-size: 12.5px; color: var(--cor-muted); }
+.cnx-side dl div:last-child { border-bottom: 0; }
+.cnx-side dd { margin: 0; color: var(--cor-text); font-family: var(--cor-mono); font-size: 12px; text-align: right; }
+.cnx-side dd.cnx-warn { color: var(--cor-amber); }
+.cnx-side .cor-btn.primary { justify-content: center; }
+.cnx-side .cor-cap b { color: var(--cor-body); font-weight: 500; }
+.cnx-code { margin: 0; padding: 12px; border-radius: 10px; border: 1px solid var(--cor-line); background: var(--cor-bg); color: var(--cor-body); font-family: var(--cor-mono); font-size: 11.5px; line-height: 1.6; white-space: pre; overflow: auto; max-height: 420px; }
+.cnx-code .c { color: var(--cor-muted); }
+.cnx-code .s { color: var(--cor-green); }
+.cnx-code .d { color: var(--cor-red); }
+.cnx-code .k { color: var(--cor-violet-3); }
+@media (max-width: 900px) { .cnx-sheet { grid-template-columns: minmax(0, 1fr); } }
+.cnx-catalog > .ofi-side-head { margin-right: 0; flex-wrap: wrap; }

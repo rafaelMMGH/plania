@@ -192,9 +192,9 @@ test("I71-2 #3: the panel's tab lives in the address; the old agent page's addre
   assert.equal(cor.atOf("?proyecto=tienda&ver=oficio:artist-t").tab, "equipo");
 });
 
-test("I71-2 #1: four tabs; Perfil says who it reports to, who reports to it, its post, your manner and its work", () => {
+test("I71-2 #1: five tabs (PLA-I75: Conexiones); Perfil says who it reports to, who reports to it, its post, your manner and its work", () => {
   const out = panel("perfil");
-  assert.equal(out.match(/role="tab"/g)?.length, 4);
+  assert.equal(out.match(/role="tab"/g)?.length, 5);
   assert.match(out, /role="tablist" aria-label="La ficha de Artist"/);
   assert.match(out, /aria-selected="true"[^>]*>Perfil/);
   assert.match(out, /<dt>Reporta a<\/dt><dd>PO <button/);
@@ -382,6 +382,10 @@ test("I71 hardening: one write per click; a one-time action stays locked after i
 test("I71 hardening: card tags keep the counts whole and put the motor's model last; a tag that does not fit drops out whole", () => {
   const out = html(h(equipo.Equipo, { p: project(core()), companyPaused: false, focus: null, links }));
   assert.match(out, /<span class="org-tags"><span class="org-tag vi"[^>]*>3 hab\.<\/span><span class="org-tag "[^>]*>2 lecc\.<\/span><span class="org-tag motor" title="Opus · medio">Opus<\/span><\/span>/);
+  // PLA-I75: a seat with connections beyond Plania says how many, green, before the motor; none says nothing.
+  const withCon = html(h(equipo.Equipo, { p: project([seat("po-t", "product-owner", "ceo", { connections: 2 })]), companyPaused: false, focus: null, links }));
+  assert.match(withCon, /<span class="org-tag "[^>]*>2 lecc\.<\/span><span class="org-tag ok"[^>]*>2 con\.<\/span><span class="org-tag motor"/);
+  assert.doesNotMatch(out, /con\.<\/span>/);
   assert.match(cssEq, /\.org-tags \{ flex: none; display: flex; flex-wrap: wrap;[^}]*height: 20px; overflow: hidden; \}/);
   assert.match(cssEq, /\.org-tag \{ flex: none; box-sizing: border-box; height: 20px;/);
   // The store's card foot wraps instead of running out of the card (owner's screenshot).
